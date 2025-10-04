@@ -21,6 +21,7 @@ typedef struct {
     bool scanning;
     bool device_found;
     char status[64];
+    int scroll_offset;  // Добавляем смещение для скроллинга
 } BtTestApp;
 
 BtTestApp* bt_test_app_alloc();
