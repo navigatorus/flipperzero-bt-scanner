@@ -46,7 +46,7 @@ static void add_device(BtScannerState* state, uint8_t channel, float rssi) {
             // Обновляем существующее устройство
             state->devices[i].last_seen = furi_get_tick();
             state->devices[i].packet_count++;
-            state->devices[i].rssi = (int8_t)rssi; // Обновляем RSSI
+            state->devices[i].rssi = (int8_t)rssi;
             device_exists = true;
             break;
         }
@@ -62,15 +62,15 @@ static void add_device(BtScannerState* state, uint8_t channel, float rssi) {
         device->last_seen = device->first_seen;
         device->packet_count = 1;
         
-        // Генерируем "реалистичное" имя на основе канала и RSSI
+        // Генерируем "реалистичное" имя
         if(channel >= 37 && channel <= 39) {
-            snprintf(device->name, sizeof(device->name), "BLE_Device_%d", channel);
+            snprintf(device->name, sizeof(device->name), "BLE_Adv_%d", channel);
         } else if(rssi > -60.0f) {
-            snprintf(device->name, sizeof(device->name), "Near_Device_%d", channel);
+            snprintf(device->name, sizeof(device->name), "Near_%d", channel);
         } else if(rssi > -75.0f) {
-            snprintf(device->name, sizeof(device->name), "Mid_Device_%d", channel);
+            snprintf(device->name, sizeof(device->name), "Mid_%d", channel);
         } else {
-            snprintf(device->name, sizeof(device->name), "Far_Device_%d", channel);
+            snprintf(device->name, sizeof(device->name), "Far_%d", channel);
         }
         
         state->device_count++;
@@ -100,14 +100,14 @@ static void bt_real_scan(BtScannerState* state) {
         uint8_t channel = all_ble_channels[i];
         
         furi_mutex_acquire(state->mutex, FuriWaitForever);
-        state->selected_index = 0; // Сбрасываем выбор
+        state->selected_index = 0;
         furi_mutex_release(state->mutex);
         
         view_port_update(state->view_port);
         
         // Сканируем канал
         furi_hal_bt_start_packet_rx(channel, 1);
-        furi_delay_ms(30); // Уменьшили время для более быстрого сканирования
+        furi_delay_ms(30);
         float rssi = furi_hal_bt_get_rssi();
         furi_hal_bt_stop_packet_test();
         
@@ -129,7 +129,7 @@ static void bt_real_scan(BtScannerState* state) {
             break;
         }
         
-        furi_delay_ms(20); // Короткая пауза между каналами
+        furi_delay_ms(20);
     }
     
     furi_mutex_acquire(state->mutex, FuriWaitForever);
@@ -274,7 +274,6 @@ static void input_callback(InputEvent* input, void* _ctx) {
             }
             break;
         case InputKeyBack:
-            // Выход из приложения
             view_port_enabled_set(state->view_port, false);
             break;
         default:
