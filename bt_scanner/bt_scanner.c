@@ -1,5 +1,7 @@
 #include "bt_scanner.h"
 
+#define TAG "BtScanner"
+
 static void bt_real_scan(BtTestApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->scanning = true;
@@ -12,7 +14,6 @@ static void bt_real_scan(BtTestApp* app) {
     
     // Сканируем основные BLE каналы
     int ble_channels[] = {37, 38, 39}; // BLE advertising channels
-    int classic_channels[] = {0, 1, 2, 3, 4, 5}; // Classic BT
     
     // Сканируем BLE каналы
     for(int i = 0; i < 3; i++) {
@@ -31,7 +32,6 @@ static void bt_real_scan(BtTestApp* app) {
         if(rssi > -85.0f) {
             found_activity = true;
             active_channels++;
-            FURI_LOG_I(TAG, "Activity on channel %d: RSSI %.1f", ble_channels[i], (double)rssi);
         }
         
         furi_delay_ms(100);
@@ -81,7 +81,6 @@ void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     furi_mutex_release(app->mutex);
 }
 
-// Остальной код без изменений...
 void bt_test_app_input_callback(InputEvent* input_event, void* context) {
     BtTestApp* app = context;
     
