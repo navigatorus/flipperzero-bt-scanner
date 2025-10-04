@@ -13,21 +13,24 @@ jobs:
       run: |
         # Создаем правильную структуру
         mkdir -p applications_user/bt_scanner
-        cp bt_scanner/* applications_user/bt_scanner/
+        cp -r bt_scanner/* applications_user/bt_scanner/
         
-        # Запускаем компиляцию с подробными логами
+        # Компилируем и ищем файл
         docker run --rm -v $(pwd):/work -w /work \
           flipperdevices/flipperzero-toolchain:latest \
           /bin/bash -c "
-            echo '=== Starting build ==='
-            ls -la applications_user/bt_scanner/
-            ./fbt fap_bt_scanner VERBOSE=yes
-            echo '=== Build finished ==='
-            find . -name '*.fap' -type f
+            echo '=== Building application ==='
+            ./fbt fap_bt_scanner
+            echo '=== Searching for .fap files ==='
+            find . -name '*.fap' -type f | head -20
+            echo '=== Build directory structure ==='
+            find build -type f -name 'bt_scanner*' | head -20
           "
         
-    - name: Upload FAP
+    - name: Upload ANY FAP files
       uses: actions/upload-artifact@v4
       with:
-        name: bt-scanner
-        path: build/f7-firmware-D/.extapps/bt_scanner.fap
+        name: bt-scanner-files
+        path: |
+          build/**/*.fap
+          build/**/bt_scanner*
