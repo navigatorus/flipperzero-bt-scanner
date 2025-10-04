@@ -12,17 +12,20 @@ jobs:
     - name: Build with Docker
       run: |
         # Клонируем прошивку
-        git clone https://github.com/flipperdevices/flipperzero-firmware.git
+        git clone --recursive https://github.com/flipperdevices/flipperzero-firmware.git
         cd flipperzero-firmware
         
         # Копируем наше приложение
-        mkdir -p applications_user/bt_scanner
-        cp -r ../bt_scanner/* applications_user/bt_scanner/
+        mkdir -p applications_user
+        cp -r ../bt_scanner applications_user/
         
         echo "=== Files structure ==="
         ls -la applications_user/bt_scanner/
+        echo "=== File contents ==="
+        cat applications_user/bt_scanner/bt_scanner.c | head -20
         
-        # Компилируем
+        # Устанавливаем зависимости и компилируем
+        ./fbt updater_package
         ./fbt fap_bt_scanner
         
         echo "=== Build results ==="
