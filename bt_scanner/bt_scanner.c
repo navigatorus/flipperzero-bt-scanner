@@ -44,16 +44,19 @@ static void generate_pseudo_mac(uint8_t channel, float rssi, uint8_t* mac) {
 
 // Определение типа устройства по каналу и характеристикам сигнала
 static BTDeviceType detect_device_type(uint8_t channel, float rssi, float stability) {
+    UNUSED(rssi);
+    UNUSED(stability);
+    
     // BLE использует каналы 37, 38, 39 для advertising
     if(channel >= 37 && channel <= 39) {
         return DeviceTypeBLE;
     }
     // Классический Bluetooth использует определенные диапазоны
-    else if(channel <= 10 && stability > 0.7f) {
+    else if(channel <= 10) {
         return DeviceTypeClassic;
     }
     // BLE Data каналы
-    else if(channel >= 0 && channel <= 36) {
+    else if(channel <= 36) {
         return DeviceTypeBRE;
     }
     return DeviceTypeUnknown;
@@ -61,6 +64,8 @@ static BTDeviceType detect_device_type(uint8_t channel, float rssi, float stabil
 
 // Генерация псевдо-имени устройства
 static void generate_device_name(BTDevice* device, uint8_t channel) {
+    UNUSED(channel);
+    
     const char* prefixes[] = {"Phone", "Speaker", "Watch", "Headset", "Tracker", "Keyboard", "Mouse"};
     const char* suffixes[] = {"Pro", "Max", "Mini", "Plus", "Lite", "Air", "Ultra"};
     
@@ -72,6 +77,8 @@ static void generate_device_name(BTDevice* device, uint8_t channel) {
         snprintf(device->name, sizeof(device->name), "BLE_%s_%s", prefix, suffix);
     } else if(device->type == DeviceTypeClassic) {
         snprintf(device->name, sizeof(device->name), "BT_%s_%s", prefix, suffix);
+    } else if(device->type == DeviceTypeBRE) {
+        snprintf(device->name, sizeof(device->name), "BR_%s_%s", prefix, suffix);
     } else {
         snprintf(device->name, sizeof(device->name), "RF_%s_%s", prefix, suffix);
     }
@@ -102,6 +109,7 @@ static void add_new_device(BtScannerState* state, uint8_t channel, float rssi) {
     new_device.signal_strength = (uint8_t)CLAMP((rssi + 100) * 2, 0, 100);
     
     // Отметить активность на канале
+    memset(new_device.channels, 0, sizeof(new_device.channels));
     new_device.channels[channel] = 1;
     
     generate_device_name(&new_device, channel);
@@ -198,9 +206,11 @@ void bt_scanner_start_scan(BtScannerState* state) {
     memset(state->channel_activity, 0, sizeof(state->channel_activity));
     furi_mutex_release(state->mutex);
     
-    // Сохраняем текущее состояние Bt
-    Bt* bt = furi_record_open(RECORD_BT);
-    bt_disconnect(bt);
+    // Сохраняем текущее состояние Bt (если доступно)
+    // Bt* bt = furi_record_open(RECORD_BT); // Пока закомментируем, т.к. RECORD_BT недоступен
+    // if(bt) {
+    //     bt_disconnect(bt);
+    // }
     furi_hal_bt_reinit();
     
     notification_message(state->ctx.notification, &sequence_scan_start);
@@ -214,10 +224,12 @@ void bt_scanner_stop_scan(BtScannerState* state) {
     FURI_LOG_I(TAG, "Stopping RF spectrum scan");
     state->scanning = false;
     
-    // Восстанавливаем нормальную работу Bt
-    Bt* bt = furi_record_open(RECORD_BT);
-    bt_profile_restore_default(bt);
-    furi_record_close(RECORD_BT);
+    // Восстанавливаем нормальную работу Bt (если доступно)
+    // Bt* bt = furi_record_open(RECORD_BT); // Пока закомментируем
+    // if(bt) {
+    //     bt_profile_restore_default(bt);
+    //     furi_record_close(RECORD_BT);
+    // }
     
     notification_message(state->ctx.notification, &sequence_scan_stop);
     FURI_LOG_I(TAG, "RF spectrum scan stopped. Found %d devices", state->device_count);
@@ -244,7 +256,7 @@ static void draw_main_screen(Canvas* canvas, BtScannerState* state) {
     // Заголовок и статус
     if(state->scanning) {
         uint32_t elapsed = (furi_get_tick() - state->scan_start_time) / 1000;
-        uint32_t remaining = (SCAN_DURATION_MS / 1000) - elapsed;
+        // uint32_t remaining = (SCAN_DURATION_MS / 1000) - elapsed; // Убрали неиспользуемую переменную
         
         canvas_draw_str(canvas, 2, 10, "BT Scanner [SCANNING]");
         
@@ -401,6 +413,7 @@ static void draw_device_details(Canvas* canvas, BtScannerState* state) {
     case DeviceTypeBLE: type_str = "BLE"; break;
     case DeviceTypeClassic: type_str = "Classic BT"; break;
     case DeviceTypeBRE: type_str = "BR/EDR"; break;
+    default: type_str = "Unknown"; break;
     }
     snprintf(buffer, sizeof(buffer), "Type: %s", type_str);
     canvas_draw_str(canvas, 2, 49, buffer);
@@ -460,6 +473,7 @@ bool bt_scanner_save_log(BtScannerState* state) {
                 case DeviceTypeBLE: type_str = "BLE"; break;
                 case DeviceTypeClassic: type_str = "Classic BT"; break;
                 case DeviceTypeBRE: type_str = "BR/EDR"; break;
+                default: type_str = "Unknown"; break;
                 }
                 
                 snprintf(buffer, sizeof(buffer),
