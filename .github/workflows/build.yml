@@ -11,13 +11,19 @@ jobs:
       
     - name: Build with Docker
       run: |
-        # Скачиваем готовый образ с компилятором
+        # Создаем правильную структуру
+        mkdir -p applications_user/bt_scanner
+        cp bt_scanner/* applications_user/bt_scanner/
+        
+        # Запускаем компиляцию с подробными логами
         docker run --rm -v $(pwd):/work -w /work \
           flipperdevices/flipperzero-toolchain:latest \
           /bin/bash -c "
-            mkdir -p applications_user/bt_scanner
-            cp -r bt_scanner/* applications_user/bt_scanner/
-            ./fbt fap_bt_scanner
+            echo '=== Starting build ==='
+            ls -la applications_user/bt_scanner/
+            ./fbt fap_bt_scanner VERBOSE=yes
+            echo '=== Build finished ==='
+            find . -name '*.fap' -type f
           "
         
     - name: Upload FAP
