@@ -9,23 +9,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Setup Flipper Zero toolchain
+    - name: Build with Docker
       run: |
-        git clone https://github.com/flipperdevices/flipperzero-firmware.git
-        cd flipperzero-firmware
-        sudo ./fbt --help  # Это установит зависимости
-        
-    - name: Build application
-      run: |
-        cd flipperzero-firmware
-        # Копируем наше приложение в прошивку
-        mkdir -p applications_user/bt_scanner
-        cp -r ../bt_scanner/* ./applications_user/bt_scanner/
-        # Компилируем
-        ./fbt fap_bt_scanner
+        # Скачиваем готовый образ с компилятором
+        docker run --rm -v $(pwd):/work -w /work \
+          flipperdevices/flipperzero-toolchain:latest \
+          /bin/bash -c "
+            mkdir -p applications_user/bt_scanner
+            cp -r bt_scanner/* applications_user/bt_scanner/
+            ./fbt fap_bt_scanner
+          "
         
     - name: Upload FAP
       uses: actions/upload-artifact@v4
       with:
         name: bt-scanner
-        path: flipperzero-firmware/build/f7-firmware-D/.extapps/bt_scanner.fap
+        path: build/f7-firmware-D/.extapps/bt_scanner.fap
