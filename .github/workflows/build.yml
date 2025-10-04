@@ -19,7 +19,7 @@ jobs:
       run: |
         cd flipperzero-firmware
         # Копируем наше приложение в прошивку
-        cp -r ../applications_user/ ./
+        cp -r ../*.c ../*.h ../*.fam ./applications_user/bt_scanner/
         # Компилируем
         ./fbt fap_bt_scanner
         
