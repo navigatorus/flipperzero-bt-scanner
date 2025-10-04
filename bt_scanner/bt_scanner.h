@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <furi.h>
 #include <furi_hal.h>
 #include <gui/gui.h>
@@ -22,3 +26,7 @@ typedef struct {
 BtTestApp* bt_test_app_alloc();
 void bt_test_app_free(BtTestApp* app);
 int32_t bt_scanner_app(void* p);
+
+#ifdef __cplusplus
+}
+#endif
