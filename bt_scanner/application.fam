@@ -5,7 +5,7 @@ App(
     entry_point="bt_scanner_app",
     stack_size=2 * 1024,
     requires=["gui", "notification"],
-    sources=["bt_scanner.c", "bt_scanner.h"],
+    sources=["bt_scanner.c"],
     fap_icon="bt_scanner_icon.png",
     fap_category="Tools",
 )
