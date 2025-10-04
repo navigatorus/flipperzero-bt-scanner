@@ -1,5 +1,6 @@
 #include <furi.h>
 #include <furi_hal.h>
+#include <furi_hal_bt.h>
 #include <gui/gui.h>
 #include <input/input.h>
 #include <notification/notification.h>
@@ -10,8 +11,8 @@
 #include <toolbox/stream/file_stream.h>
 
 #define TAG "BtScanner"
-#define MAX_DEVICES 50
-#define SCAN_DURATION_MS 45000
+#define MAX_DEVICES 100
+#define SCAN_DURATION_MS 30000
 
 typedef struct {
     uint8_t mac[6];
@@ -44,6 +45,14 @@ typedef struct {
     bool show_details;
 } BtScannerState;
 
+static const NotificationSequence sequence_blink_blue = {
+    &message_blue_255,
+    &message_delay_100,
+    &message_blue_0,
+    &message_delay_100,
+    NULL,
+};
+
 static const NotificationSequence sequence_blink_green = {
     &message_green_255,
     &message_delay_50,
@@ -52,45 +61,84 @@ static const NotificationSequence sequence_blink_green = {
     NULL,
 };
 
-// Генерация случайных устройств для демонстрации
-static void generate_random_device(BtScannerState* state) {
-    if(state->device_count >= MAX_DEVICES) return;
+// Callback для реального BLE сканирования
+static void bt_scan_callback(void* context, uint32_t event) {
+    BtScannerState* state = (BtScannerState*)context;
+    
+    if(event != BtStatusReady) return;
 
-    BTDevice* new_device = &state->devices[state->device_count];
+    // Получаем результаты сканирования
+    uint32_t devices_count = bt_get_discovered_devices_count();
     
-    // Генерируем случайный MAC
-    for(int i = 0; i < 6; i++) {
-        new_device->mac[i] = rand() % 256;
+    furi_mutex_acquire(state->mutex, FuriWaitForever);
+    
+    for(uint32_t i = 0; i < devices_count && state->device_count < MAX_DEVICES; i++) {
+        BTDevice new_device = {0};
+        
+        // Получаем информацию об устройстве
+        const char* name = bt_get_discovered_device_name(i);
+        int8_t rssi = bt_get_discovered_device_rssi(i);
+        const uint8_t* mac = bt_get_discovered_device_address(i);
+        
+        if(!mac) continue;
+        
+        // Проверяем, есть ли уже такое устройство
+        bool exists = false;
+        for(uint16_t j = 0; j < state->device_count; j++) {
+            if(memcmp(state->devices[j].mac, mac, 6) == 0) {
+                state->devices[j].rssi = rssi;
+                state->devices[j].last_seen = furi_get_tick();
+                state->devices[j].packet_count++;
+                exists = true;
+                break;
+            }
+        }
+        
+        if(!exists) {
+            memcpy(new_device.mac, mac, 6);
+            new_device.rssi = rssi;
+            new_device.first_seen = furi_get_tick();
+            new_device.last_seen = furi_get_tick();
+            new_device.packet_count = 1;
+            
+            if(name && strlen(name) > 0) {
+                strlcpy(new_device.name, name, sizeof(new_device.name));
+            } else {
+                snprintf(new_device.name, sizeof(new_device.name), 
+                        "%02X:%02X:%02X", mac[3], mac[4], mac[5]);
+            }
+            
+            state->devices[state->device_count] = new_device;
+            state->device_count++;
+            state->new_device_found = true;
+            
+            notification_message(state->ctx.notification, &sequence_blink_blue);
+        }
     }
-    new_device->rssi = -60 - (rand() % 40); // RSSI от -60 до -100
-    new_device->first_seen = furi_get_tick();
-    new_device->last_seen = furi_get_tick();
-    new_device->packet_count = 1;
     
-    const char* test_names[] = {
-        "iPhone", "Samsung", "AirPods", "SmartWatch", "Android", 
-        "Tablet", "Laptop", "Headphones", "Speaker", "CarKit"
-    };
-    strlcpy(new_device->name, test_names[rand() % 10], sizeof(new_device->name));
-    
-    state->device_count++;
-    state->new_device_found = true;
+    furi_mutex_release(state->mutex);
 }
 
-// Запуск сканирования - УПРОЩЕННАЯ ВЕРСИЯ
+// Запуск реального сканирования
 static void start_scanning(BtScannerState* state) {
     if(state->scanning) return;
     
-    FURI_LOG_I(TAG, "Starting BLE scan simulation");
+    FURI_LOG_I(TAG, "Starting REAL BLE scan");
     
+    // Очищаем старые устройства
+    furi_mutex_acquire(state->mutex, FuriWaitForever);
+    state->device_count = 0;
     state->scanning = true;
     state->scan_start_time = furi_get_tick();
     state->new_device_found = false;
+    furi_mutex_release(state->mutex);
     
-    // Мигаем зеленым при сканировании
+    // Запускаем настоящее BLE сканирование
+    bt_set_status_changed_callback(bt_scan_callback, state);
+    bt_start_discovery();
+    
     notification_message(state->ctx.notification, &sequence_blink_green);
-    
-    FURI_LOG_I(TAG, "BLE scan simulation started");
+    FURI_LOG_I(TAG, "Real BLE scan started");
 }
 
 // Остановка сканирования
@@ -98,6 +146,8 @@ static void stop_scanning(BtScannerState* state) {
     if(!state->scanning) return;
     
     FURI_LOG_I(TAG, "Stopping BLE scan");
+    bt_stop_discovery();
+    bt_set_status_changed_callback(NULL, NULL);
     state->scanning = false;
     
     notification_message(state->ctx.notification, &sequence_blink_stop);
@@ -152,7 +202,7 @@ static void draw_main_screen(Canvas* canvas, BtScannerState* state) {
         sort_devices_by_rssi(state->devices, state->device_count);
         
         uint8_t y_pos = 35;
-        uint8_t visible_count = (state->device_count > 4) ? 4 : state->device_count;
+        uint8_t visible_count = (state->device_count > 3) ? 3 : state->device_count;
         
         for(uint8_t i = 0; i < visible_count; i++) {
             BTDevice* device = &state->devices[i];
@@ -164,15 +214,15 @@ static void draw_main_screen(Canvas* canvas, BtScannerState* state) {
             }
             
             // Индикатор сигнала (полоски)
-            int8_t bars = (device->rssi + 100) / 10;
-            bars = CLAMP(bars, 0, 6);
+            int8_t bars = (device->rssi + 80) / 10; // -80 to 0 dBm
+            bars = CLAMP(bars, 1, 6);
             for(uint8_t b = 0; b < bars; b++) {
                 canvas_draw_box(canvas, 2 + (b * 2), y_pos - 3 - (b * 2), 1, 3 + (b * 2));
             }
             
             // Информация об устройстве
-            char device_info[48];
-            snprintf(device_info, sizeof(device_info), "%-18s %ddBm", device->name, device->rssi);
+            char device_info[32];
+            snprintf(device_info, sizeof(device_info), "%-12s %ddB", device->name, device->rssi);
             canvas_draw_str(canvas, 15, y_pos, device_info);
             
             if(i == state->selected_index) {
@@ -183,13 +233,15 @@ static void draw_main_screen(Canvas* canvas, BtScannerState* state) {
         }
         
         // Индикатор скролла
-        if(state->device_count > 4) {
+        if(state->device_count > 3) {
             canvas_draw_str(canvas, 120, 35, "↓");
         }
     } else {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 10, 45, "No devices found");
-        canvas_draw_str(canvas, 10, 55, "Start scan to discover");
+        if(!state->scanning) {
+            canvas_draw_str(canvas, 10, 55, "Start scan to discover");
+        }
     }
     
     // Подсказки
@@ -230,12 +282,8 @@ static void draw_device_details(Canvas* canvas, BtScannerState* state) {
     snprintf(buffer, sizeof(buffer), "Packets: %d", device->packet_count);
     canvas_draw_str(canvas, 70, 49, buffer);
     
-    // Визуализация сигнала
-    canvas_draw_str(canvas, 2, 61, "Signal:");
-    int width = ((device->rssi + 100) * 80) / 60;
-    width = CLAMP(width, 0, 80);
-    canvas_draw_rframe(canvas, 35, 55, 82, 8, 1);
-    canvas_draw_box(canvas, 36, 56, width, 6);
+    // Сигнал
+    canvas_draw_str(canvas, 2, 61, "Signal strength:");
     
     canvas_draw_str(canvas, 2, 75, "Back:Return  OK:Save Log");
 }
@@ -335,7 +383,7 @@ static void input_callback(InputEvent* input, void* _ctx) {
             switch(input->key) {
             case InputKeyUp:
                 if(state->device_count > 0) {
-                    state->selected_index = (state->selected_index - 1 + state->device_count) % state->device_count;
+                    state->selected_index = (state->selected_index > 0) ? state->selected_index - 1 : state->device_count - 1;
                 }
                 break;
             case InputKeyDown:
@@ -411,10 +459,7 @@ int32_t bt_scanner_app(void* p) {
     UNUSED(p);
     
     BtScannerState* state = bt_scanner_alloc();
-    FURI_LOG_I(TAG, "BT Scanner FULL VERSION started");
-    
-    // Инициализируем случайные числа для генерации устройств
-    srand(furi_get_tick());
+    FURI_LOG_I(TAG, "REAL BT Scanner started");
     
     bool running = true;
     while(running) {
@@ -424,24 +469,13 @@ int32_t bt_scanner_app(void* p) {
         if(state->scanning) {
             uint32_t elapsed = furi_get_tick() - state->scan_start_time;
             if(elapsed >= SCAN_DURATION_MS) {
-                furi_mutex_acquire(state->mutex, FuriWaitForever);
                 stop_scanning(state);
-                furi_mutex_release(state->mutex);
-            }
-            
-            // Периодически генерируем устройства во время сканирования
-            if((furi_get_tick() % 1000) < 50 && (rand() % 100) < 20) { // 20% шанс каждую секунду
-                furi_mutex_acquire(state->mutex, FuriWaitForever);
-                generate_random_device(state);
-                furi_mutex_release(state->mutex);
             }
         }
         
         furi_delay_ms(50);
     }
     
-    if(state->scanning) stop_scanning(state);
     bt_scanner_free(state);
-    
     return 0;
 }
