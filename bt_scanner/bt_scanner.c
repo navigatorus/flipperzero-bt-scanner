@@ -301,7 +301,7 @@ static void draw_main_screen(Canvas* canvas, BtScannerState* state) {
             }
             
             // Информация об устройстве
-            char device_info[32];
+            char device_info[40];
             const char* type_str = "";
             switch(device->type) {
             case DeviceTypeBLE: type_str = "BLE"; break;
@@ -310,7 +310,7 @@ static void draw_main_screen(Canvas* canvas, BtScannerState* state) {
             default: type_str = "RF"; break;
             }
             
-            snprintf(device_info, sizeof(device_info), "%-8s %ddB", device->name, device->rssi);
+            snprintf(device_info, sizeof(device_info), "%-8s %d dB", device->name, device->rssi);
             canvas_draw_str(canvas, 15, y_pos, device_info);
             
             // Тип устройства
