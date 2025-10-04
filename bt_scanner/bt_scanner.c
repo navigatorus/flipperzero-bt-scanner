@@ -49,7 +49,7 @@ static void bt_real_scan(BtTestApp* app) {
     furi_mutex_release(app->mutex);
 }
 
-void bt_test_app_draw_callback(Canvas* canvas, void* context) {
+static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     BtTestApp* app = context;
     
     if(furi_mutex_acquire(app->mutex, 100) != FuriStatusOk) return;
@@ -79,7 +79,7 @@ void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     furi_mutex_release(app->mutex);
 }
 
-void bt_test_app_input_callback(InputEvent* input_event, void* context) {
+static void bt_test_app_input_callback(InputEvent* input_event, void* context) {
     BtTestApp* app = context;
     
     if(input_event->type == InputTypeShort) {
