@@ -1,51 +1,54 @@
 #include "bt_scanner.h"
 
-static void bt_test_scan(BtTestApp* app) {
+static void bt_real_scan(BtTestApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->scanning = true;
     app->device_found = false;
-    strcpy(app->status, "Scanning...");
+    strcpy(app->status, "Scanning BT devices...");
     furi_mutex_release(app->mutex);
     
-    notification_message(app->notification, &sequence_blink_start_blue);
+    bool found_activity = false;
+    int active_channels = 0;
     
-    // Простая попытка сканирования
-    bool found_something = false;
+    // Сканируем основные BLE каналы
+    int ble_channels[] = {37, 38, 39}; // BLE advertising channels
+    int classic_channels[] = {0, 1, 2, 3, 4, 5}; // Classic BT
     
-    // Попробуем использовать доступные функции
-    for(int attempt = 0; attempt < 3; attempt++) {
+    // Сканируем BLE каналы
+    for(int i = 0; i < 3; i++) {
         furi_mutex_acquire(app->mutex, FuriWaitForever);
-        snprintf(app->status, sizeof(app->status), "Scanning... Attempt %d/3", attempt + 1);
+        snprintf(app->status, sizeof(app->status), "Scanning BLE ch %d", ble_channels[i]);
         furi_mutex_release(app->mutex);
         
         view_port_update(app->view_port);
-        furi_delay_ms(1000);
         
-        // Проверяем доступность BLE
-        if(furi_hal_bt_is_active()) {
-            found_something = true;
-            break;
+        // Пытаемся обнаружить активность на канале
+        furi_hal_bt_start_packet_rx(ble_channels[i], 1);
+        furi_delay_ms(50);
+        float rssi = furi_hal_bt_get_rssi();
+        furi_hal_bt_stop_packet_test();
+        
+        if(rssi > -85.0f) {
+            found_activity = true;
+            active_channels++;
+            FURI_LOG_I(TAG, "Activity on channel %d: RSSI %.1f", ble_channels[i], (double)rssi);
         }
         
-        // Короткая пауза между попытками
-        furi_delay_ms(500);
+        furi_delay_ms(100);
     }
     
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->scanning = false;
     
-    if(found_something) {
-        strcpy(app->status, "BLE Stack: ACTIVE");
+    if(found_activity) {
+        snprintf(app->status, sizeof(app->status), "Found activity! %d ch", active_channels);
         app->device_found = true;
-        notification_message(app->notification, &sequence_success);
     } else {
-        strcpy(app->status, "No BLE activity detected");
+        strcpy(app->status, "No BT devices found");
         app->device_found = false;
-        notification_message(app->notification, &sequence_error);
     }
     
     furi_mutex_release(app->mutex);
-    notification_message(app->notification, &sequence_blink_stop);
 }
 
 void bt_test_app_draw_callback(Canvas* canvas, void* context) {
@@ -55,35 +58,39 @@ void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     
     canvas_clear(canvas);
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 2, 10, "BT Scanner Test");
+    canvas_draw_str(canvas, 2, 10, "BT Device Scanner");
     canvas_draw_line(canvas, 0, 12, 127, 12);
     
     canvas_set_font(canvas, FontSecondary);
     canvas_draw_str(canvas, 2, 25, app->status);
     
-    if(app->device_found) {
-        canvas_draw_str(canvas, 2, 40, "Device: BLE Stack");
-        canvas_draw_str(canvas, 2, 50, "Status: Active");
+    if(app->scanning) {
+        canvas_draw_str(canvas, 2, 40, "Scanning...");
+        canvas_draw_str(canvas, 2, 50, "Check nearby devices");
+    } else if(app->device_found) {
+        canvas_draw_str(canvas, 2, 40, "BT devices detected!");
+        canvas_draw_str(canvas, 2, 50, "Try full scanner app");
     } else {
         canvas_draw_str(canvas, 2, 40, "No devices found");
+        canvas_draw_str(canvas, 2, 50, "Ensure BT is enabled");
     }
     
     canvas_draw_line(canvas, 0, 55, 127, 55);
-    canvas_draw_str(canvas, 2, 65, "OK: Scan  Back: Exit");
+    canvas_draw_str(canvas, 2, 65, "OK=Scan  Back=Exit");
     
     furi_mutex_release(app->mutex);
 }
 
+// Остальной код без изменений...
 void bt_test_app_input_callback(InputEvent* input_event, void* context) {
     BtTestApp* app = context;
     
     if(input_event->type == InputTypeShort) {
         if(input_event->key == InputKeyOk) {
             if(!app->scanning) {
-                bt_test_scan(app);
+                bt_real_scan(app);
             }
         } else if(input_event->key == InputKeyBack) {
-            // Выход из приложения
             view_port_enabled_set(app->view_port, false);
         }
     }
@@ -126,7 +133,6 @@ int32_t bt_scanner_app(void* p) {
     
     BtTestApp* app = bt_test_app_alloc();
     
-    // Главный цикл
     while(view_port_is_enabled(app->view_port)) {
         view_port_update(app->view_port);
         furi_delay_ms(50);
