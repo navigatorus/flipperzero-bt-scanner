@@ -1,5 +1,27 @@
 #include "bt_scanner.h"
 
+static const NotificationSequence sequence_scan_start = {
+    &message_blue_255,
+    &message_delay_100,
+    &message_blue_0, 
+    &message_delay_100,
+    NULL,
+};
+
+static const NotificationSequence sequence_success = {
+    &message_green_255,
+    &message_delay_250,
+    &message_green_0,
+    NULL,
+};
+
+static const NotificationSequence sequence_error = {
+    &message_red_255,
+    &message_delay_250,
+    &message_red_0,
+    NULL,
+};
+
 static void bt_test_scan(BtTestApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->scanning = true;
@@ -7,7 +29,7 @@ static void bt_test_scan(BtTestApp* app) {
     strcpy(app->status, "Scanning...");
     furi_mutex_release(app->mutex);
     
-    notification_message(app->notification, &sequence_blink_start_blue);
+    notification_message(app->notification, &sequence_scan_start);
     
     // Простая попытка сканирования
     bool found_something = false;
@@ -45,7 +67,6 @@ static void bt_test_scan(BtTestApp* app) {
     }
     
     furi_mutex_release(app->mutex);
-    notification_message(app->notification, &sequence_blink_stop);
 }
 
 void bt_test_app_draw_callback(Canvas* canvas, void* context) {
