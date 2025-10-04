@@ -6,13 +6,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Build FAP
-      uses: flipperdevices/flipperzero-firmware-action@main
-      with:
-        fbt-args: "fap_bt_scanner"
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flipper Zero toolchain
+      run: |
+        git clone https://github.com/flipperdevices/flipperzero-firmware.git
+        cd flipperzero-firmware
+        sudo ./fbt --help  # Это установит зависимости
+        
+    - name: Build application
+      run: |
+        cd flipperzero-firmware
+        # Копируем наше приложение в прошивку
+        cp -r ../applications_user/ ./
+        # Компилируем
+        ./fbt fap_bt_scanner
+        
     - name: Upload FAP
       uses: actions/upload-artifact@v4
       with:
-        name: bt-scanner-full
-        path: build/f7-firmware-D/.extapps/bt_scanner.fap
+        name: bt-scanner
+        path: flipperzero-firmware/build/f7-firmware-D/.extapps/bt_scanner.fap
