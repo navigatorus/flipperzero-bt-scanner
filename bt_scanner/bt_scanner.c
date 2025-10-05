@@ -12,8 +12,8 @@ static void bt_real_scan(BtTestApp* app) {
     
     bool found_activity = false;
     int active_channels = 0;
+    float best_rssi = -100.0f; // Для отслеживания лучшего сигнала
     
-    // Используем ТОЛЬКО те каналы, которые работали
     int ble_channels[] = {37, 38, 39};
     
     for(int i = 0; i < 3; i++) {
@@ -25,19 +25,19 @@ static void bt_real_scan(BtTestApp* app) {
         
         view_port_update(app->view_port);
         
-        // ТОЧНО ТАК ЖЕ КАК В РАБОЧЕЙ ВЕРСИИ
         furi_hal_bt_start_packet_rx(ble_channels[i], 1);
-        furi_delay_ms(100); // Увеличиваем время сканирования
+        furi_delay_ms(100);
         float rssi = furi_hal_bt_get_rssi();
         furi_hal_bt_stop_packet_test();
         
-        FURI_LOG_I(TAG, "Channel %d: RSSI %.1f", ble_channels[i], (double)rssi);
+        // Сохраняем лучший RSSI
+        if(rssi > best_rssi) {
+            best_rssi = rssi;
+        }
         
-        // Более чувствительный порог
         if(rssi > -90.0f) {
             found_activity = true;
             active_channels++;
-            FURI_LOG_I(TAG, "ACTIVITY FOUND! Channel %d: %.1f dB", ble_channels[i], (double)rssi);
         }
         
         furi_delay_ms(50);
@@ -47,10 +47,11 @@ static void bt_real_scan(BtTestApp* app) {
     app->scanning = false;
     
     if(found_activity) {
-        snprintf(app->status, sizeof(app->status), "Found %d channels!", active_channels);
+        // Показываем количество каналов и лучший RSSI
+        snprintf(app->status, sizeof(app->status), "Found %d ch, %.1f dB", active_channels, (double)best_rssi);
         app->device_found = true;
     } else {
-        strcpy(app->status, "No devices");
+        snprintf(app->status, sizeof(app->status), "No devices (%.1f dB)", (double)best_rssi);
         app->device_found = false;
     }
     
@@ -71,7 +72,7 @@ static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     
     canvas_set_font(canvas, FontSecondary);
     
-    // Статус сканирования
+    // Статус сканирования (теперь с RSSI)
     canvas_draw_str(canvas, 2, 24, app->status);
     
     // Детали в зависимости от состояния
@@ -80,14 +81,14 @@ static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
         canvas_draw_str(canvas, 2, 46, "Ch 37,38,39");
     } else if(app->device_found) {
         canvas_draw_str(canvas, 2, 36, "Devices found!");
-        canvas_draw_str(canvas, 2, 46, "BT active");
+        canvas_draw_str(canvas, 2, 46, "BT active nearby");
     } else {
         if(strcmp(app->status, "Press OK to scan") == 0) {
             canvas_draw_str(canvas, 2, 36, "Press OK button");
             canvas_draw_str(canvas, 2, 46, "to start scan");
         } else {
             canvas_draw_str(canvas, 2, 36, "Scan complete");
-            canvas_draw_str(canvas, 2, 46, "No activity");
+            canvas_draw_str(canvas, 2, 46, "No BT activity");
         }
     }
     
@@ -99,6 +100,7 @@ static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     furi_mutex_release(app->mutex);
 }
 
+// Остальной код без изменений...
 static void bt_test_app_input_callback(InputEvent* input_event, void* context) {
     BtTestApp* app = context;
     
