@@ -115,60 +115,64 @@ static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     canvas_clear(canvas);
     canvas_set_font(canvas, FontPrimary);
     
-    canvas_draw_str(canvas, 2, 10, "BT Signal Analyzer");
+    // Заголовок
+    canvas_draw_str(canvas, 2, 10, "BT Analyzer");
     canvas_draw_line(canvas, 0, 12, 127, 12);
     
     canvas_set_font(canvas, FontSecondary);
     
-    // Статус и оценка устройств
+    // Основной статус (верхняя строка)
     canvas_draw_str(canvas, 2, 24, app->status);
     
+    // Информация о сканированиях (правый верхний угол)
+    char scan_info[16];
+    snprintf(scan_info, sizeof(scan_info), "#%d", app->scan_count);
+    canvas_draw_str(canvas, 110, 24, scan_info);
+    
+    // Основной контент (средняя часть)
     if(app->scanning) {
-        canvas_draw_str(canvas, 2, 36, "Scanning 40 channels...");
-        canvas_draw_str(canvas, 2, 46, "Pattern analysis");
+        canvas_draw_str(canvas, 2, 36, "Scanning...");
+        canvas_draw_str(canvas, 2, 46, "40 channels");
     } else if(app->device_found) {
-        // Показываем анализ
+        // Показываем оценку устройств
         if(app->estimated_devices > 0) {
-            char devices_str[32];
-            snprintf(devices_str, sizeof(devices_str), "Est: %d devices", app->estimated_devices);
+            char devices_str[20];
+            snprintf(devices_str, sizeof(devices_str), "~%d devices", app->estimated_devices);
             canvas_draw_str(canvas, 2, 36, devices_str);
         } else {
-            canvas_draw_str(canvas, 2, 36, "Signals detected");
+            canvas_draw_str(canvas, 2, 36, "Signals found");
         }
+        // Тип паттерна
         canvas_draw_str(canvas, 2, 46, app->pattern_info);
     } else {
         if(strcmp(app->status, "Press OK to scan") == 0) {
-            canvas_draw_str(canvas, 2, 36, "Press OK to start");
-            canvas_draw_str(canvas, 2, 46, "signal analysis");
+            canvas_draw_str(canvas, 2, 36, "Press OK to");
+            canvas_draw_str(canvas, 2, 46, "start analysis");
         } else {
-            canvas_draw_str(canvas, 2, 36, "Analysis complete");
-            canvas_draw_str(canvas, 2, 46, "No signals found");
+            canvas_draw_str(canvas, 2, 36, "No signals");
+            canvas_draw_str(canvas, 2, 46, "detected");
         }
     }
     
-    // Информация о сканированиях
-    char scan_info[32];
-    snprintf(scan_info, sizeof(scan_info), "Scans: %d", app->scan_count);
-    canvas_draw_str(canvas, 90, 24, scan_info);
-    
-    // Простая визуализация активности каналов
-    if(app->scan_count > 0) {
-        canvas_draw_str(canvas, 2, 58, "Ch37-39:");
+    // Визуализация BLE каналов (компактная)
+    if(app->scan_count > 0 && app->device_found) {
+        canvas_draw_str(canvas, 70, 36, "BLE:");
         
-        // Индикаторы BLE advertising каналов
+        // Индикаторы только для каналов 37,38,39
         for(int i = 37; i <= 39; i++) {
-            int bars = (app->channel_activity[i] > 0) ? 3 : 1;
-            int x_pos = 50 + (i - 37) * 15;
-            
-            for(int b = 0; b < bars; b++) {
-                canvas_draw_box(canvas, x_pos, 58 - (b * 2), 2, 2 + (b * 2));
+            int x_pos = 90 + (i - 37) * 10;
+            if(app->channel_activity[i] > 0) {
+                canvas_draw_box(canvas, x_pos, 34, 6, 6); // Активный канал
+            } else {
+                canvas_draw_frame(canvas, x_pos, 34, 6, 6); // Неактивный канал
             }
         }
     }
     
+    // Подсказки управления (нижняя часть)
     canvas_draw_line(canvas, 0, 52, 127, 52);
-    canvas_draw_str(canvas, 2, 62, "OK=Scan");
-    canvas_draw_str(canvas, 60, 62, "Back=Exit");
+    canvas_draw_str(canvas, 2, 60, "OK=Scan");
+    canvas_draw_str(canvas, 70, 60, "Back=Exit");
     
     furi_mutex_release(app->mutex);
 }
