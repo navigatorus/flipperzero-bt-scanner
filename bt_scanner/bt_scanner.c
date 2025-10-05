@@ -94,7 +94,6 @@ static void bt_real_scan(BtTestApp* app) {
     furi_mutex_release(app->mutex);
 }
 
-// Остальной код без изменений...
 static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     BtTestApp* app = context;
     
@@ -132,4 +131,65 @@ static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     furi_mutex_release(app->mutex);
 }
 
-// input_callback, bt_test_app_alloc, bt_test_app_free, bt_scanner_app без изменений
+static void bt_test_app_input_callback(InputEvent* input_event, void* context) {
+    BtTestApp* app = context;
+    
+    if(input_event->type == InputTypeShort) {
+        if(input_event->key == InputKeyOk) {
+            if(!app->scanning) {
+                bt_real_scan(app);
+            }
+        } else if(input_event->key == InputKeyBack) {
+            view_port_enabled_set(app->view_port, false);
+        }
+    }
+}
+
+BtTestApp* bt_test_app_alloc() {
+    BtTestApp* app = malloc(sizeof(BtTestApp));
+    
+    app->gui = furi_record_open(RECORD_GUI);
+    app->notification = furi_record_open(RECORD_NOTIFICATION);
+    app->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
+    
+    app->view_port = view_port_alloc();
+    view_port_draw_callback_set(app->view_port, bt_test_app_draw_callback, app);
+    view_port_input_callback_set(app->view_port, bt_test_app_input_callback, app);
+    gui_add_view_port(app->gui, app->view_port, GuiLayerFullscreen);
+    
+    app->scanning = false;
+    app->device_found = false;
+    strcpy(app->status, "Press OK to scan");
+    
+    return app;
+}
+
+void bt_test_app_free(BtTestApp* app) {
+    if(!app) return;
+    
+    gui_remove_view_port(app->gui, app->view_port);
+    view_port_free(app->view_port);
+    furi_mutex_free(app->mutex);
+    
+    furi_record_close(RECORD_NOTIFICATION);
+    furi_record_close(RECORD_GUI);
+    
+    free(app);
+}
+
+int32_t bt_scanner_app(void* p) {
+    UNUSED(p);
+    
+    BtTestApp* app = bt_test_app_alloc();
+    
+    FURI_LOG_I(TAG, "BT Scanner started");
+    
+    while(view_port_is_enabled(app->view_port)) {
+        view_port_update(app->view_port);
+        furi_delay_ms(50);
+    }
+    
+    bt_test_app_free(app);
+    FURI_LOG_I(TAG, "BT Scanner stopped");
+    return 0;
+}
