@@ -3,7 +3,6 @@
 static void analyze_patterns(BtTestApp* app) {
     int ble_adv_channels = 0;    // BLE advertising каналы (37,38,39)
     int ble_data_channels = 0;   // BLE data каналы (0-36)
-    int classic_bt_channels = 0; // Классический Bluetooth
     float total_rssi = 0;
     int active_channels = 0;
     
