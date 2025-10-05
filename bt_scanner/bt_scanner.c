@@ -4,25 +4,25 @@ static void bt_real_scan(BtTestApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->scanning = true;
     app->device_found = false;
-    app->scroll_offset = 0;  // Сбрасываем скролл при новом сканировании
+    app->scroll_offset = 0;
     strcpy(app->status, "Scanning BT devices...");
     furi_mutex_release(app->mutex);
     
     bool found_activity = false;
     int active_channels = 0;
     
-    // Сканируем основные BLE каналы
-    int ble_channels[] = {37, 38, 39}; // BLE advertising channels
+    int ble_channels[] = {37, 38, 39};
     
-    // Сканируем BLE каналы
     for(int i = 0; i < 3; i++) {
+        // Проверяем не вышли ли из приложения
+        if(!view_port_is_enabled(app->view_port)) break;
+        
         furi_mutex_acquire(app->mutex, FuriWaitForever);
         snprintf(app->status, sizeof(app->status), "Scanning BLE ch %d", ble_channels[i]);
         furi_mutex_release(app->mutex);
         
         view_port_update(app->view_port);
         
-        // Пытаемся обнаружить активность на канале
         furi_hal_bt_start_packet_rx(ble_channels[i], 1);
         furi_delay_ms(50);
         float rssi = furi_hal_bt_get_rssi();
@@ -58,45 +58,39 @@ static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     canvas_clear(canvas);
     canvas_set_font(canvas, FontPrimary);
     
-    // Заголовок (всегда видим)
-    canvas_draw_str(canvas, 2, 10 + app->scroll_offset, "BT Device Scanner");
-    canvas_draw_line(canvas, 0, 12 + app->scroll_offset, 127, 12 + app->scroll_offset);
+    // Заголовок
+    canvas_draw_str(canvas, 2, 10, "BT Device Scanner");
+    canvas_draw_line(canvas, 0, 12, 127, 12);
     
     canvas_set_font(canvas, FontSecondary);
     
-    // Статус сканирования
-    canvas_draw_str(canvas, 2, 25 + app->scroll_offset, app->status);
+    // Статус
+    canvas_draw_str(canvas, 2, 24, app->status);
     
-    // Основной контент с учетом скролла
+    // Основной контент в зависимости от состояния
     if(app->scanning) {
-        canvas_draw_str(canvas, 2, 40 + app->scroll_offset, "Scanning...");
-        canvas_draw_str(canvas, 2, 50 + app->scroll_offset, "Check nearby devices");
-        canvas_draw_str(canvas, 2, 60 + app->scroll_offset, "BLE channels: 37,38,39");
+        canvas_draw_str(canvas, 2, 36, "Scanning BLE channels...");
+        canvas_draw_str(canvas, 2, 46, "37, 38, 39");
     } else if(app->device_found) {
-        canvas_draw_str(canvas, 2, 40 + app->scroll_offset, "BT devices detected!");
-        canvas_draw_str(canvas, 2, 50 + app->scroll_offset, "Try full scanner app");
-        canvas_draw_str(canvas, 2, 60 + app->scroll_offset, "with advanced features");
-        canvas_draw_str(canvas, 2, 70 + app->scroll_offset, "and device list");
+        // Только после сканирования показываем детали
+        canvas_draw_str(canvas, 2, 36, "Devices detected nearby!");
+        canvas_draw_str(canvas, 2, 46, "BLE activity found");
     } else {
-        canvas_draw_str(canvas, 2, 40 + app->scroll_offset, "No devices found");
-        canvas_draw_str(canvas, 2, 50 + app->scroll_offset, "Ensure BT is enabled");
-        canvas_draw_str(canvas, 2, 60 + app->scroll_offset, "on nearby devices");
-        canvas_draw_str(canvas, 2, 70 + app->scroll_offset, "and try again");
+        // До сканирования показываем только инструкцию
+        if(strcmp(app->status, "Press OK to scan") == 0) {
+            canvas_draw_str(canvas, 2, 36, "Press OK to start scan");
+            canvas_draw_str(canvas, 2, 46, "for BT devices");
+        } else {
+            // После сканирования, если ничего не найдено
+            canvas_draw_str(canvas, 2, 36, "No devices found");
+            canvas_draw_str(canvas, 2, 46, "Try again later");
+        }
     }
     
-    // Подсказки управления (всегда внизу экрана)
-    canvas_draw_line(canvas, 0, 55, 127, 55);
-    canvas_draw_str(canvas, 2, 62, "OK=Scan");
-    canvas_draw_str(canvas, 45, 62, "Up/Down=Scroll");
-    canvas_draw_str(canvas, 2, 70, "Back=Exit");
-    
-    // Индикатор скролла (если есть что скроллить)
-    if(app->scroll_offset < 0) {
-        canvas_draw_str(canvas, 120, 62, "^");
-    }
-    if(app->scroll_offset > -20) { // Максимальный скролл вниз
-        canvas_draw_str(canvas, 120, 70, "v");
-    }
+    // Подсказки управления - поднимаем выше и делаем короче
+    canvas_draw_line(canvas, 0, 53, 127, 53);
+    canvas_draw_str(canvas, 2, 60, "OK=Scan");
+    canvas_draw_str(canvas, 50, 60, "Back=Exit");
     
     furi_mutex_release(app->mutex);
 }
@@ -108,25 +102,13 @@ static void bt_test_app_input_callback(InputEvent* input_event, void* context) {
 
     if(input_event->type == InputTypeShort) {
         switch(input_event->key) {
-        case InputKeyUp:
-            // Скролл вверх (увеличиваем offset)
-            if(app->scroll_offset < 0) {
-                app->scroll_offset += 10;
-                if(app->scroll_offset > 0) app->scroll_offset = 0;
-            }
-            break;
-        case InputKeyDown:
-            // Скролл вниз (уменьшаем offset)
-            if(app->scroll_offset > -30) { // Ограничиваем максимальный скролл
-                app->scroll_offset -= 10;
-            }
-            break;
         case InputKeyOk:
             if(!app->scanning) {
                 bt_real_scan(app);
             }
             break;
         case InputKeyBack:
+            // Правильный выход из приложения
             view_port_enabled_set(app->view_port, false);
             break;
         default:
@@ -151,7 +133,7 @@ BtTestApp* bt_test_app_alloc() {
     
     app->scanning = false;
     app->device_found = false;
-    app->scroll_offset = 0;  // Изначально без скролла
+    app->scroll_offset = 0;
     strcpy(app->status, "Press OK to scan");
     
     return app;
@@ -175,6 +157,7 @@ int32_t bt_scanner_app(void* p) {
     
     BtTestApp* app = bt_test_app_alloc();
     
+    // Главный цикл - проверяем включен ли view_port
     while(view_port_is_enabled(app->view_port)) {
         view_port_update(app->view_port);
         furi_delay_ms(50);
