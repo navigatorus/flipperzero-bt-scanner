@@ -98,7 +98,8 @@ static void bt_real_scan(BtTestApp* app) {
         // Показываем прогресс
         if(i % 5 == 0) {
             furi_mutex_acquire(app->mutex, FuriWaitForever);
-            snprintf(app->status, sizeof(app->status), "Scan %d/%d", i + 1, total_points);
+            // Исправлено: более короткая строка прогресса
+            snprintf(app->status, sizeof(app->status), "%d/%d", i + 1, total_points);
             furi_mutex_release(app->mutex);
             view_port_update(app->view_port);
         }
@@ -153,6 +154,7 @@ static void bt_real_scan(BtTestApp* app) {
     
     if(found_activity) {
         if(app->estimated_devices > 0) {
+            // Исправлено: более короткая строка статуса
             snprintf(app->status, sizeof(app->status), "%d BT devices", app->estimated_devices);
             app->device_found = true;
         } else {
@@ -195,8 +197,9 @@ static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
         canvas_draw_str(canvas, 2, 46, "21 RF points");
     } else if(app->device_found) {
         if(app->estimated_devices > 0) {
-            char dev_str[24];
-            snprintf(dev_str, sizeof(dev_str), "Found: %d devices", app->estimated_devices);
+            // Исправлено: более короткая строка чтобы влезала
+            char dev_str[20];
+            snprintf(dev_str, sizeof(dev_str), "Devices: %d", app->estimated_devices);
             canvas_draw_str(canvas, 2, 36, dev_str);
         } else {
             canvas_draw_str(canvas, 2, 36, "RF activity");
