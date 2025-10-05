@@ -11,6 +11,8 @@ extern "C" {
 #include <notification/notification.h>
 
 #define TAG "BtScanner"
+#define MAX_CHANNELS 40
+#define SCAN_HISTORY 10
 
 typedef struct {
     ViewPort* view_port;
@@ -21,7 +23,14 @@ typedef struct {
     bool scanning;
     bool device_found;
     char status[64];
-    int scroll_offset;  // Добавляем смещение для скроллинга
+    
+    // Анализ паттернов
+    int channel_activity[MAX_CHANNELS];  // Активность по каналам
+    float channel_rssi[MAX_CHANNELS];    // Средний RSSI по каналам
+    int scan_count;                      // Количество сканирований
+    int estimated_devices;               // Оценка количества устройств
+    char pattern_info[32];               // Информация о паттерне
+    
 } BtTestApp;
 
 BtTestApp* bt_test_app_alloc();
