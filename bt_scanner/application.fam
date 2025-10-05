@@ -1,6 +1,6 @@
 App(
     appid="bt_scanner",
-    name="BT Scanner",
+    name="BT Analyzer",
     apptype=FlipperAppType.EXTERNAL,
     entry_point="bt_scanner_app",
     stack_size=2 * 1024,
