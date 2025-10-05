@@ -1,5 +1,20 @@
 #include "bt_scanner.h"
 
+// Правильные последовательности уведомлений
+static const NotificationSequence sequence_success = {
+    &message_green_255,
+    &message_delay_100,
+    &message_green_0,
+    NULL
+};
+
+static const NotificationSequence sequence_error = {
+    &message_vibro_on,
+    &message_delay_100,
+    &message_vibro_off,
+    NULL
+};
+
 static void bt_real_scan(BtTestApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->scanning = true;
@@ -51,20 +66,14 @@ static void bt_real_scan(BtTestApp* app) {
         app->device_found = true;
         
         // Яркое уведомление о найденных устройствах
-        NotificationApp* notification = furi_record_open(RECORD_NOTIFICATION);
-        notification_message(notification, &sequence_set_green_255);
-        furi_delay_ms(100);
-        notification_message(notification, &sequence_reset_green);
-        furi_record_close(RECORD_NOTIFICATION);
+        notification_message(app->notification, &sequence_success);
         
     } else {
         strcpy(app->status, "No devices");
         app->device_found = false;
         
         // Тихий сигнал что сканирование завершено
-        NotificationApp* notification = furi_record_open(RECORD_NOTIFICATION);
-        notification_message(notification, &sequence_single_vibro);
-        furi_record_close(RECORD_NOTIFICATION);
+        notification_message(app->notification, &sequence_error);
     }
     
     furi_mutex_release(app->mutex);
