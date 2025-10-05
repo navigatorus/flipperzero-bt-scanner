@@ -4,62 +4,67 @@ static void bt_real_scan(BtTestApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->scanning = true;
     app->device_found = false;
-    strcpy(app->status, "Starting scan...");
+    strcpy(app->status, "Scanning...");
     furi_mutex_release(app->mutex);
     
     view_port_update(app->view_port);
-    furi_delay_ms(500);
-    
-    bool found_activity = false;
-    
-    // ОСТОРОЖНО: Отключаем BLE перед сканированием
-    furi_hal_bt_stop_advertising();
     furi_delay_ms(100);
     
+    bool found_activity = false;
+    int active_channels = 0;
+    
+    // Используем ТОЛЬКО те каналы, которые работали
     int ble_channels[] = {37, 38, 39};
     
     for(int i = 0; i < 3; i++) {
-        // Проверяем не вышли ли из приложения
         if(!view_port_is_enabled(app->view_port)) break;
         
         furi_mutex_acquire(app->mutex, FuriWaitForever);
-        snprintf(app->status, sizeof(app->status), "Scan ch %d...", ble_channels[i]);
+        snprintf(app->status, sizeof(app->status), "Channel %d", ble_channels[i]);
         furi_mutex_release(app->mutex);
         
         view_port_update(app->view_port);
         
-        // Безопасное сканирование с проверкой ошибок
+        // ТОЧНО ТАК ЖЕ КАК В РАБОЧЕЙ ВЕРСИИ
         furi_hal_bt_start_packet_rx(ble_channels[i], 1);
-        furi_delay_ms(30); // Уменьшили время
-        
-        float rssi = -100.0f; // Значение по умолчанию
-        if(furi_hal_bt_is_active()) {
-            rssi = furi_hal_bt_get_rssi();
-        }
-        
+        furi_delay_ms(100); // Увеличиваем время сканирования
+        float rssi = furi_hal_bt_get_rssi();
         furi_hal_bt_stop_packet_test();
-        furi_delay_ms(50); // Пауза между каналами
         
-        FURI_LOG_D(TAG, "Channel %d RSSI: %.1f", ble_channels[i], (double)rssi);
+        FURI_LOG_I(TAG, "Channel %d: RSSI %.1f", ble_channels[i], (double)rssi);
         
-        if(rssi > -85.0f) {
+        // Более чувствительный порог
+        if(rssi > -90.0f) {
             found_activity = true;
-            FURI_LOG_I(TAG, "Activity found on channel %d", ble_channels[i]);
+            active_channels++;
+            FURI_LOG_I(TAG, "ACTIVITY FOUND! Channel %d: %.1f dB", ble_channels[i], (double)rssi);
         }
+        
+        furi_delay_ms(50);
     }
-    
-    // Восстанавливаем BLE
-    furi_hal_bt_start_advertising();
     
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->scanning = false;
     
     if(found_activity) {
-        strcpy(app->status, "BT devices found!");
+        snprintf(app->status, sizeof(app->status), "Found %d channels!", active_channels);
         app->device_found = true;
+        
+        // Яркое уведомление о найденных устройствах
+        NotificationApp* notification = furi_record_open(RECORD_NOTIFICATION);
+        notification_message(notification, &sequence_set_green_255);
+        furi_delay_ms(100);
+        notification_message(notification, &sequence_reset_green);
+        furi_record_close(RECORD_NOTIFICATION);
+        
     } else {
-        strcpy(app->status, "No devices found");
+        strcpy(app->status, "No devices");
         app->device_found = false;
+        
+        // Тихий сигнал что сканирование завершено
+        NotificationApp* notification = furi_record_open(RECORD_NOTIFICATION);
+        notification_message(notification, &sequence_single_vibro);
+        furi_record_close(RECORD_NOTIFICATION);
     }
     
     furi_mutex_release(app->mutex);
@@ -73,36 +78,36 @@ static void bt_test_app_draw_callback(Canvas* canvas, void* context) {
     canvas_clear(canvas);
     canvas_set_font(canvas, FontPrimary);
     
-    // Заголовок - подняли выше
-    canvas_draw_str(canvas, 2, 8, "BT Device Scanner");
-    canvas_draw_line(canvas, 0, 10, 127, 10);
+    // Заголовок
+    canvas_draw_str(canvas, 2, 10, "BT Scanner");
+    canvas_draw_line(canvas, 0, 12, 127, 12);
     
     canvas_set_font(canvas, FontSecondary);
     
-    // Статус
-    canvas_draw_str(canvas, 2, 22, app->status);
+    // Статус сканирования
+    canvas_draw_str(canvas, 2, 24, app->status);
     
-    // Основной контент
+    // Детали в зависимости от состояния
     if(app->scanning) {
-        canvas_draw_str(canvas, 2, 34, "Scanning...");
-        canvas_draw_str(canvas, 2, 44, "Channels: 37,38,39");
+        canvas_draw_str(canvas, 2, 36, "Scanning BLE...");
+        canvas_draw_str(canvas, 2, 46, "Ch 37,38,39");
     } else if(app->device_found) {
-        canvas_draw_str(canvas, 2, 34, "Devices nearby!");
-        canvas_draw_str(canvas, 2, 44, "BLE activity detected");
+        canvas_draw_str(canvas, 2, 36, "Devices found!");
+        canvas_draw_str(canvas, 2, 46, "BT active");
     } else {
         if(strcmp(app->status, "Press OK to scan") == 0) {
-            canvas_draw_str(canvas, 2, 34, "Press OK to start");
-            canvas_draw_str(canvas, 2, 44, "BT device scan");
+            canvas_draw_str(canvas, 2, 36, "Press OK button");
+            canvas_draw_str(canvas, 2, 46, "to start scan");
         } else {
-            canvas_draw_str(canvas, 2, 34, "Scan complete");
-            canvas_draw_str(canvas, 2, 44, "No devices found");
+            canvas_draw_str(canvas, 2, 36, "Scan complete");
+            canvas_draw_str(canvas, 2, 46, "No activity");
         }
     }
     
-    // Подсказки управления - подняли ВЫШЕ и сделали компактнее
-    canvas_draw_line(canvas, 0, 50, 127, 50); // Подняли линию
-    canvas_draw_str(canvas, 2, 58, "OK=Scan"); // Подняли текст
-    canvas_draw_str(canvas, 60, 58, "Back=Exit");
+    // Подсказки
+    canvas_draw_line(canvas, 0, 52, 127, 52);
+    canvas_draw_str(canvas, 2, 60, "OK=Scan");
+    canvas_draw_str(canvas, 60, 60, "Back=Exit");
     
     furi_mutex_release(app->mutex);
 }
@@ -113,7 +118,6 @@ static void bt_test_app_input_callback(InputEvent* input_event, void* context) {
     if(input_event->type == InputTypeShort) {
         if(input_event->key == InputKeyOk) {
             if(!app->scanning) {
-                // Запускаем в отдельном потоке чтобы не блокировать UI
                 bt_real_scan(app);
             }
         } else if(input_event->key == InputKeyBack) {
@@ -143,9 +147,6 @@ BtTestApp* bt_test_app_alloc() {
 
 void bt_test_app_free(BtTestApp* app) {
     if(!app) return;
-    
-    // Восстанавливаем BLE при выходе
-    furi_hal_bt_start_advertising();
     
     gui_remove_view_port(app->gui, app->view_port);
     view_port_free(app->view_port);
