@@ -49,20 +49,9 @@ static void bt_real_scan(BtTestApp* app) {
     if(found_activity) {
         snprintf(app->status, sizeof(app->status), "Found %d channels!", active_channels);
         app->device_found = true;
-        
-        // Простое уведомление - мигание синим
-        NotificationApp* notification = furi_record_open(RECORD_NOTIFICATION);
-        notification_message(notification, &sequence_blink_blue_100);
-        furi_record_close(RECORD_NOTIFICATION);
-        
     } else {
         strcpy(app->status, "No devices");
         app->device_found = false;
-        
-        // Простое уведомление - мигание красным
-        NotificationApp* notification = furi_record_open(RECORD_NOTIFICATION);
-        notification_message(notification, &sequence_blink_red_100);
-        furi_record_close(RECORD_NOTIFICATION);
     }
     
     furi_mutex_release(app->mutex);
